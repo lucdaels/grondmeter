@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2d6a4f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Grondmeter">
+<title>Grondmeter</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #2d6a4f;
+    --green-light: #52b788;
+    --green-pale: #d8f3dc;
+    --orange: #e76f51;
+    --yellow: #f4a261;
+    --bg: #f8faf9;
+    --card: #ffffff;
+    --text: #1b1b1b;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --radius: 12px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    display: flex;
+    z-index: 100;
+  }
+  nav button {
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 10px 0 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--muted);
+    transition: color .15s;
+  }
+  nav button.active { color: var(--green); }
+  nav button svg { width: 24px; height: 24px; }
+
+  /* ── SCREENS ── */
+  .screen { display: none; padding: 16px 16px 90px; }
+  .screen.active { display: block; }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; color: var(--green); }
+  .header-btn {
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .plant-name { font-size: 16px; font-weight: 600; }
+  .plant-date { font-size: 12px; color: var(--muted); }
+
+  /* ── METER WAARDEN ── */
+  .meter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .meter-item {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+  }
+  .meter-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .meter-value { font-size: 17px; font-weight: 700; color: var(--green); }
+  .meter-unit { font-size: 10px; color: var(--muted); }
+
+  /* ── ADVIES BADGE ── */
+  .advice-badge {
+    font-size: 12px;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-weight: 600;
+  }
+  .badge-ok { background: var(--green-pale); color: var(--green); }
+  .badge-water { background: #dbeafe; color: #1d4ed8; }
+  .badge-droog { background: #fef3c7; color: #92400e; }
+  .badge-mest { background: #ede9fe; color: #6d28d9; }
+  .badge-warn { background: #fee2e2; color: #b91c1c; }
+
+  /* ── LEGE STAAT ── */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: .3; }
+  .empty p { font-size: 15px; }
+
+  /* ── METING FORMULIER ── */
+  .form-step {
+    display: none;
+    animation: fadeIn .2s ease;
+  }
+  .form-step.active { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .step-indicator {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+  .step-dot {
+    height: 4px;
+    flex: 1;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background .2s;
+  }
+  .step-dot.done { background: var(--green); }
+
+  .form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .form-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 15px;
+    background: var(--card);
+    margin-bottom: 14px;
+    color: var(--text);
+    appearance: none;
+  }
+  .form-input:focus { outline: 2px solid var(--green); border-color: transparent; }
+
+  .photo-btn {
+    width: 100%;
+    aspect-ratio: 4/3;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    position: relative;
+  }
+  .photo-btn img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--radius) - 2px);
+  }
+  .photo-btn svg { opacity: .4; width: 40px; height: 40px; }
+  .photo-btn span { color: var(--muted); font-size: 14px; }
+  .photo-taken { border-color: var(--green-light); border-style: solid; }
+
+  .primary-btn {
+    width: 100%;
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+    margin-top: 4px;
+  }
+  .primary-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .primary-btn:not(:disabled):active { opacity: .8; }
+
+  .secondary-btn {
+    width: 100%;
+    background: none;
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  /* ── HANDMATIG INVOER ── */
+  .meter-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .meter-inputs .full { grid-column: 1 / -1; }
+
+  /* ── ANALYSE LADEN ── */
+  .analysis-loading {
+    display: none;
+    text-align: center;
+    padding: 30px;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── ADVIES BOX ── */
+  .advice-box {
+    background: var(--green-pale);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin: 12px 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #1a3c2a;
+  }
+  .advice-box h3 { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--green); }
+
+  /* ── GESCHIEDENIS ── */
+  .history-filter {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 14px;
+    scrollbar-width: none;
+  }
+  .filter-chip {
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-chip.active { background: var(--green); color: white; border-color: var(--green); }
+
+  /* ── TREND GRAFIEK ── */
+  .trend-chart {
+    height: 80px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .trend-line {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .trend-area {
+    fill: var(--green-pale);
+  }
+
+  /* ── INSTELLINGEN ── */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 10px; }
+  .settings-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 8px;
+  }
+  .settings-row label { font-size: 14px; font-weight: 600; display: block; margin-bottom: 6px; }
+  .settings-row .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .key-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    font-family: monospace;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .save-btn {
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  .status-ok { color: var(--green-light); font-size: 12px; margin-top: 6px; display: none; }
+  .bak-list { display: flex; flex-direction: column; gap: 6px; }
+  .bak-item { display: flex; align-items: center; gap: 8px; }
+  .bak-item input[type=text] {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 14px;
+    background: var(--bg);
+  }
+  .add-bak-btn { background: none; border: 1px dashed var(--border); border-radius: 8px; padding: 8px; cursor: pointer; color: var(--muted); font-size: 13px; width: 100%; margin-top: 6px; }
+  .del-bak { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px; }
+
+  /* ── DETAIL OVERLAY ── */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 200;
+    overflow-y: auto;
+  }
+  .overlay.open { display: block; }
+  .overlay-inner {
+    background: var(--card);
+    margin: 60px 16px 16px;
+    border-radius: 16px;
+    padding: 20px;
+    max-width: 448px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .overlay-close {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--muted);
+    margin-top: -4px;
+  }
+  .photo-thumb {
+    width: 100%;
+    border-radius: 10px;
+    object-fit: cover;
+    max-height: 200px;
+    margin-bottom: 10px;
+  }
+
+  /* ── MODEL SELECTOR ── */
+  .model-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .model-chip {
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    background: var(--bg);
+  }
+  .model-chip.active { background: var(--green); color: white; border-color: var(--green); }
+
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1b1b1b;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 300;
+    opacity: 0;
+    transition: opacity .2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- SCHERM 1: OVERZICHT -->
+<div id="screen-home" class="screen active">
+  <div class="header">
+    <h1>🌱 Moestuin</h1>
+    <button class="header-btn" onclick="showScreen('screen-meting')" title="Nieuwe meting">+</button>
+  </div>
+  <div id="overview-list">
+    <div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/>
+      </svg>
+      <p>Nog geen metingen.<br>Tik op <strong>+</strong> om te beginnen.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SCHERM 2: NIEUWE METING -->
+<div id="screen-meting" class="screen">
+  <div class="header">
+    <h1>Nieuwe meting</h1>
+    <button class="header-btn" style="background:var(--muted)" onclick="showScreen('screen-home')">✕</button>
+  </div>
+
+  <div class="step-indicator">
+    <div class="step-dot" id="dot-0"></div>
+    <div class="step-dot" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Stap 0: Bak kiezen -->
+  <div class="form-step active" id="step-0">
+    <div class="card">
+      <span class="form-label">Welke bak / plant?</span>
+      <select class="form-input" id="sel-bak">
+        <option value="">— Kies een bak —</option>
+      </select>
+      <span class="form-label">Plantennaam (optioneel)</span>
+      <input class="form-input" type="text" id="inp-plant" placeholder="bijv. tomaat, courgette …">
+    </div>
+    <button class="primary-btn" onclick="goStep(1)" id="btn-step0">Volgende →</button>
+  </div>
+
+  <!-- Stap 1: Foto van ver (plant herkennen) -->
+  <div class="form-step" id="step-1">
+    <div class="card">
+      <span class="form-label">Foto van ver — plant herkennen</span>
+      <label class="photo-btn" id="lbl-foto-ver">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Tik om foto te nemen</span>
+        <input type="file" accept="image/*" capture="environment" id="inp-foto-ver" style="display:none" onchange="fotoGekozen('ver', this)">
+      </label>
+    </div>
+    <button class="primary-btn" onclick="goStep(2)" id="btn-step1" disabled>Volgende →</button>
+    <button class="secondary-btn" onclick="goStep(0)">← Terug</button>
+  </div>
+
+  <!-- Stap 2: Foto van dicht (meter lezen) -->
+  <div class="form-step" id="step-2">
+    <div class="card">
+      <span class="form-label">Foto van dicht — meter lezen</span>
+      <label class="photo-btn" id="lbl-foto-dicht">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Tik om foto te nemen</span>
+        <input type="file" accept="image/*" capture="environment" id="inp-foto-dicht" style="display:none" onchange="fotoGekozen('dicht', this)">
+      </label>
+      <p style="font-size:12px;color:var(--muted)">Richt de camera op de display van de grondmeter.</p>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <span class="form-label">Of voer waarden handmatig in</span>
+      <div class="meter-inputs">
+        <div>
+          <span class="form-label" style="margin-bottom:4px">Vruchtbaarheid</span>
+          <input class="form-input" type="number" id="m-fertility" placeholder="0–3000">
+        </div>
+        <div>
+          <span class="form-label" style="margin-bottom:4px">Vocht %</span>
+          <input class="form-input" type="number" id="m-moisture" placeholder="0–100">
+        </div>
+        <div>
+          <span class="form-label" style="margin-bottom:4px">pH</span>
+          <input class="form-input" type="number" step="0.1" id="m-ph" placeholder="0–14">
+        </div>
+        <div>
+          <span class="form-label" style="margin-bottom:4px">Temp °C</span>
+          <input class="form-input" type="number" id="m-temp" placeholder="">
+        </div>
+        <div class="full">
+          <span class="form-label" style="margin-bottom:4px">Licht (lux)</span>
+          <input class="form-input" type="number" id="m-light" placeholder="">
+        </div>
+      </div>
+    </div>
+
+    <button class="primary-btn" onclick="goStep(3)" id="btn-step2">Analyseren met AI →</button>
+    <button class="secondary-btn" onclick="goStep(1)">← Terug</button>
+  </div>
+
+  <!-- Stap 3: Analyse & advies -->
+  <div class="form-step" id="step-3">
+    <div class="analysis-loading" id="analysis-loading">
+      <div class="spinner"></div>
+      <p style="color:var(--muted)">Claude analyseert de foto's…</p>
+    </div>
+
+    <div id="analysis-result" style="display:none">
+      <div class="card" id="result-plant-card">
+        <div class="card-header">
+          <span class="plant-name" id="result-plant-name">—</span>
+          <span class="advice-badge" id="result-badge">—</span>
+        </div>
+        <div class="meter-grid" id="result-meter-grid"></div>
+        <div class="advice-box" id="result-advice"></div>
+      </div>
+
+      <button class="primary-btn" onclick="slaOp()">Meting opslaan ✓</button>
+      <button class="secondary-btn" onclick="goStep(2)">← Foto opnieuw</button>
+    </div>
+
+    <div id="no-api-box" style="display:none">
+      <div class="card">
+        <p style="font-size:14px;margin-bottom:10px">⚠️ Geen API-sleutel ingesteld.<br>Ga naar <strong>Instellingen</strong> om je sleutel in te voeren.</p>
+        <p style="font-size:12px;color:var(--muted)">Je kunt de meting ook manueel opslaan met de waarden die je zelf hebt ingevuld.</p>
+      </div>
+      <button class="primary-btn" onclick="showScreen('screen-instellingen')">Naar instellingen</button>
+      <button class="secondary-btn" onclick="slaManueelOp()">Meting opslaan zonder AI</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCHERM 3: GESCHIEDENIS -->
+<div id="screen-geschiedenis" class="screen">
+  <div class="header">
+    <h1>Geschiedenis</h1>
+  </div>
+  <div class="history-filter" id="history-filter">
+    <div class="filter-chip active" onclick="filterGeschiedenis(null, this)">Alles</div>
+  </div>
+  <div id="history-list">
+    <div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <p>Nog geen metingen opgeslagen.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SCHERM 4: INSTELLINGEN -->
+<div id="screen-instellingen" class="screen">
+  <div class="header"><h1>Instellingen</h1></div>
+
+  <div class="settings-section">
+    <h2>Claude API</h2>
+    <div class="settings-row">
+      <label>API-sleutel</label>
+      <input class="key-input" type="password" id="inp-apikey" placeholder="sk-ant-…">
+      <p class="hint">Haal je sleutel op via <strong>console.anthropic.com</strong></p>
+      <div class="model-row">
+        <span class="model-chip active" data-model="claude-haiku-4-5" onclick="kiesModel(this)">Haiku 4.5 (goedkoop)</span>
+        <span class="model-chip" data-model="claude-sonnet-4-6" onclick="kiesModel(this)">Sonnet 4.6 (nauwkeuriger)</span>
+      </div>
+      <button class="save-btn" onclick="slaApiKeyOp()">Opslaan</button>
+      <p class="status-ok" id="key-saved">✓ Opgeslagen</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2>Bakken</h2>
+    <div class="settings-row">
+      <div class="bak-list" id="bak-list"></div>
+      <button class="add-bak-btn" onclick="voegBakToe()">+ Bak toevoegen</button>
+      <button class="save-btn" style="margin-top:10px" onclick="slaBakkenOp()">Bakken opslaan</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2>Data</h2>
+    <div class="settings-row">
+      <label>Export</label>
+      <p class="hint" style="margin-bottom:8px">Download al je metingen als JSON-bestand.</p>
+      <button class="save-btn" onclick="exportData()">Exporteren</button>
+    </div>
+    <div class="settings-row">
+      <label style="color:var(--orange)">Alle data wissen</label>
+      <p class="hint" style="margin-bottom:8px">Verwijdert alle metingen. Niet ongedaan te maken.</p>
+      <button class="save-btn" style="background:var(--orange)" onclick="wisAlles()">Alles wissen</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="overlay-inner">
+    <button class="overlay-close" onclick="sluitOverlay()">✕</button>
+    <div id="overlay-content"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- NAVIGATIE -->
+<nav>
+  <button onclick="showScreen('screen-home')" id="nav-home" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+    Overzicht
+  </button>
+  <button onclick="showScreen('screen-meting')" id="nav-meting">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    Meten
+  </button>
+  <button onclick="showScreen('screen-geschiedenis')" id="nav-geschiedenis">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    Trends
+  </button>
+  <button onclick="showScreen('screen-instellingen')" id="nav-instellingen">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    Instellingen
+  </button>
+</nav>
+
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.style.background = '#fff';
+  document.body.innerHTML = '<div style="padding:20px;font-family:sans-serif;color:red"><h2>JavaScript fout</h2><p>' + msg + '</p><p>Lijn: ' + line + '</p><p>' + (err ? err.stack : '') + '</p></div>';
+};
+
+// ═══════════════════════════════════════════════
+// DATABASE (IndexedDB)
+// ═══════════════════════════════════════════════
+let db;
+const DB_NAME = 'grondmeter';
+const DB_VER = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('metingen')) {
+        const store = d.createObjectStore('metingen', { keyPath: 'id', autoIncrement: true });
+        store.createIndex('bak', 'bak', { unique: false });
+        store.createIndex('datum', 'datum', { unique: false });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(db); };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGet(store, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAll(store) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbAdd(store, data) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).add(data);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbDelete(store, id) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbClear(store) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const state = {
+  huidigeFoto: { ver: null, dicht: null },
+  huidigeStap: 0,
+  analyseResultaat: null,
+  filterBak: null,
+  model: 'claude-sonnet-4-6',
+};
+
+function getSettings() {
+  return {
+    apiKey: localStorage.getItem('gm_apikey') || '',
+    bakken: JSON.parse(localStorage.getItem('gm_bakken') || '["Compost 1","Compost 2","Compost 3","Potgrond 1","Potgrond 2","Potgrond 3"]'),
+    model: localStorage.getItem('gm_model') || 'claude-sonnet-4-6',
+  };
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATIE
+// ═══════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const navId = 'nav-' + id.replace('screen-', '');
+  const navBtn = document.getElementById(navId);
+  if (navBtn) navBtn.classList.add('active');
+
+  if (id === 'screen-home') laadOverzicht();
+  if (id === 'screen-geschiedenis') laadGeschiedenis();
+  if (id === 'screen-instellingen') laadInstellingen();
+  if (id === 'screen-meting') resetMeting();
+}
+
+// ═══════════════════════════════════════════════
+// METING WIZARD
+// ═══════════════════════════════════════════════
+function resetMeting() {
+  state.huidigeFoto = { ver: null, dicht: null };
+  state.analyseResultaat = null;
+  goStep(0);
+  document.getElementById('inp-plant').value = '';
+  document.getElementById('m-fertility').value = '';
+  document.getElementById('m-moisture').value = '';
+  document.getElementById('m-ph').value = '';
+  document.getElementById('m-temp').value = '';
+  document.getElementById('m-light').value = '';
+  resetFotoBtn('lbl-foto-ver');
+  resetFotoBtn('lbl-foto-dicht');
+  document.getElementById('btn-step1').disabled = true;
+  document.getElementById('analysis-result').style.display = 'none';
+  document.getElementById('analysis-loading').style.display = 'none';
+  document.getElementById('no-api-box').style.display = 'none';
+}
+
+function resetFotoBtn(id) {
+  const lbl = document.getElementById(id);
+  const img = lbl.querySelector('img');
+  if (img) img.remove();
+  lbl.classList.remove('photo-taken');
+  lbl.querySelector('svg').style.display = '';
+  lbl.querySelector('span').style.display = '';
+}
+
+function goStep(n) {
+  document.querySelectorAll('.form-step').forEach((s, i) => {
+    s.classList.toggle('active', i === n);
+  });
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('dot-' + i).classList.toggle('done', i < n);
+  }
+  state.huidigeStap = n;
+  if (n === 3) startAnalyse();
+}
+
+function fotoGekozen(kant, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.huidigeFoto[kant] = e.target.result; // base64 data URL
+    const lblId = kant === 'ver' ? 'lbl-foto-ver' : 'lbl-foto-dicht';
+    const lbl = document.getElementById(lblId);
+    lbl.querySelector('svg').style.display = 'none';
+    lbl.querySelector('span').style.display = 'none';
+    const img = lbl.querySelector('img') || document.createElement('img');
+    img.src = e.target.result;
+    if (!lbl.querySelector('img')) lbl.appendChild(img);
+    lbl.classList.add('photo-taken');
+    if (kant === 'ver') document.getElementById('btn-step1').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ═══════════════════════════════════════════════
+// CLAUDE API ANALYSE
+// ═══════════════════════════════════════════════
+async function startAnalyse() {
+  const { apiKey, model } = getSettings();
+  document.getElementById('analysis-result').style.display = 'none';
+  document.getElementById('no-api-box').style.display = 'none';
+
+  if (!apiKey) {
+    document.getElementById('no-api-box').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('analysis-loading').style.display = 'block';
+
+  try {
+    const bakNaam = document.getElementById('sel-bak').value || 'onbekend';
+    const plantNaam = document.getElementById('inp-plant').value.trim();
+    const manueel = {
+      fertility: document.getElementById('m-fertility').value,
+      moisture: document.getElementById('m-moisture').value,
+      ph: document.getElementById('m-ph').value,
+      temp: document.getElementById('m-temp').value,
+      light: document.getElementById('m-light').value,
+    };
+
+    // Historiek ophalen voor deze bak
+    const alleMetingen = await dbGetAll('metingen');
+    const bakMetingen = alleMetingen
+      .filter(m => m.bak === bakNaam)
+      .sort((a, b) => b.datum - a.datum)
+      .slice(0, 5);
+    const historiekTekst = bakMetingen.length
+      ? bakMetingen.map(m => `${new Date(m.datum).toLocaleDateString('nl-BE')}: vruchtbaarheid=${m.fertility}, vocht=${m.moisture}%, pH=${m.ph}`).join('\n')
+      : 'Geen eerdere metingen beschikbaar.';
+
+    // Berichten opbouwen
+    const content = [];
+
+    // Foto van ver (plant herkennen)
+    if (state.huidigeFoto.ver) {
+      const base64 = state.huidigeFoto.ver.split(',')[1];
+      const mediaType = state.huidigeFoto.ver.split(';')[0].split(':')[1];
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data: base64 }
+      });
+      content.push({ type: 'text', text: 'Dit is de foto van ver (voor plantherkenning).' });
+    }
+
+    // Foto van dicht (meter lezen)
+    if (state.huidigeFoto.dicht) {
+      const base64 = state.huidigeFoto.dicht.split(',')[1];
+      const mediaType = state.huidigeFoto.dicht.split(';')[0].split(':')[1];
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data: base64 }
+      });
+      content.push({ type: 'text', text: 'Dit is de close-up van de grondmeter display.' });
+    }
+
+    // Manuele waarden toevoegen als opgegeven
+    const manueelTekst = Object.entries(manueel)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+
+    const prompt = `Je bent een expert moestuinierder. Analyseer de foto's en geef advies.
+
+BAK: ${bakNaam}
+PLANT (opgegeven door gebruiker): ${plantNaam || 'onbekend — leid af uit foto'}
+${manueelTekst ? `MANUEEL INGEVOERDE WAARDEN: ${manueelTekst}` : ''}
+
+RECENTE METINGEN VOOR DEZE BAK:
+${historiekTekst}
+
+INSTRUCTIES:
+1. Identificeer de plant op de eerste foto (als er geen foto is, gebruik de opgegeven naam).
+2. Lees de waarden van de grondmeter op de tweede foto: vruchtbaarheid (0-3000), vocht (%), pH, temperatuur (°C), licht (lux). Als er geen meter-foto is, gebruik de manueel ingevoerde waarden.
+3. Geef concreet advies: water geven of niet? Bemesting nodig? Oogsten? Verplanten?
+4. Houd rekening met de historische trend.
+
+Antwoord UITSLUITEND in dit JSON-formaat (geen tekst erbuiten):
+{
+  "plant": "naam van de plant",
+  "fertility": getal of null,
+  "moisture": getal of null,
+  "ph": getal of null,
+  "temp": getal of null,
+  "light": getal of null,
+  "status": "ok" of "water" of "droog" of "mest" of "warn",
+  "badge": "korte status in 2 woorden",
+  "advies": "concreet advies in 2-4 zinnen in het Nederlands"
+}`;
+
+    content.push({ type: 'text', text: prompt });
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: model,
+        max_tokens: 512,
+        messages: [{ role: 'user', content }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'API-fout');
+    }
+
+    const data = await response.json();
+    const tekst = data.content[0].text.trim();
+    // JSON uit antwoord extraheren
+    const jsonMatch = tekst.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Geen geldig JSON-antwoord van Claude');
+    const resultaat = JSON.parse(jsonMatch[0]);
+
+    state.analyseResultaat = resultaat;
+    toonResultaat(resultaat);
+
+  } catch (err) {
+    document.getElementById('analysis-loading').style.display = 'none';
+    toonToast('Fout: ' + err.message);
+    document.getElementById('no-api-box').style.display = 'block';
+  }
+}
+
+function toonResultaat(r) {
+  document.getElementById('analysis-loading').style.display = 'none';
+  document.getElementById('analysis-result').style.display = 'block';
+
+  document.getElementById('result-plant-name').textContent = r.plant || '—';
+
+  const badge = document.getElementById('result-badge');
+  badge.textContent = r.badge || r.status || '—';
+  badge.className = 'advice-badge badge-' + (r.status || 'ok');
+
+  const grid = document.getElementById('result-meter-grid');
+  grid.innerHTML = '';
+  const velden = [
+    { label: 'Vruchtbaarheid', key: 'fertility', unit: '' },
+    { label: 'Vocht', key: 'moisture', unit: '%' },
+    { label: 'pH', key: 'ph', unit: '' },
+    { label: 'Temp', key: 'temp', unit: '°C' },
+    { label: 'Licht', key: 'light', unit: 'lux' },
+  ];
+  velden.forEach(v => {
+    if (r[v.key] !== null && r[v.key] !== undefined) {
+      grid.innerHTML += `<div class="meter-item">
+        <div class="meter-label">${v.label}</div>
+        <div class="meter-value">${r[v.key]}</div>
+        <div class="meter-unit">${v.unit}</div>
+      </div>`;
+    }
+  });
+
+  document.getElementById('result-advice').innerHTML = `<h3>Advies</h3>${r.advies}`;
+}
+
+function comprimeerFoto(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = dataUrl;
+  });
+}
+async function slaOp() {
+  const r = state.analyseResultaat;
+  if (!r) return;
+  const meting = {
+    datum: Date.now(),
+    bak: document.getElementById('sel-bak').value || 'onbekend',
+    plant: r.plant,
+    fertility: r.fertility,
+    moisture: r.moisture,
+    ph: r.ph,
+    temp: r.temp,
+    light: r.light,
+    status: r.status,
+    advies: r.advies,
+    fotoVer: state.huidigeFoto.ver ? await comprimeerFoto(state.huidigeFoto.ver) : null,
+    fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
+  };
+  await dbAdd('metingen', meting);
+  toonToast('Meting opgeslagen!');
+  showScreen('screen-home');
+}
+
+async function slaManueelOp() {
+  const meting = {
+    datum: Date.now(),
+    bak: document.getElementById('sel-bak').value || 'onbekend',
+    plant: document.getElementById('inp-plant').value || 'onbekend',
+    fertility: parseFloat(document.getElementById('m-fertility').value) || null,
+    moisture: parseFloat(document.getElementById('m-moisture').value) || null,
+    ph: parseFloat(document.getElementById('m-ph').value) || null,
+    temp: parseFloat(document.getElementById('m-temp').value) || null,
+    light: parseFloat(document.getElementById('m-light').value) || null,
+    status: 'ok',
+    advies: 'Manueel ingevoerd — geen AI-analyse.',
+    fotoVer: state.huidigeFoto.ver ? await comprimeerFoto(state.huidigeFoto.ver) : null,
+    fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
+  };
+  await dbAdd('metingen', meting);
+  toonToast('Meting opgeslagen!');
+  showScreen('screen-home');
+}
+
+// ═══════════════════════════════════════════════
+// OVERZICHT
+// ═══════════════════════════════════════════════
+async function laadOverzicht() {
+  const metingen = await dbGetAll('metingen');
+  const el = document.getElementById('overview-list');
+
+  if (!metingen.length) {
+    el.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z"/>
+      </svg>
+      <p>Nog geen metingen.<br>Tik op <strong>+</strong> om te beginnen.</p>
+    </div>`;
+    return;
+  }
+
+  // Laatste meting per bak groeperen
+  const perBak = {};
+  metingen.forEach(m => {
+    if (!perBak[m.bak] || m.datum > perBak[m.bak].datum) perBak[m.bak] = m;
+  });
+
+  el.innerHTML = Object.values(perBak)
+    .sort((a, b) => b.datum - a.datum)
+    .map(m => kaartHTML(m, metingen.filter(x => x.bak === m.bak)))
+    .join('');
+}
+
+function kaartHTML(m, bakMetingen) {
+  const datum = new Date(m.datum).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' });
+  const velden = [
+    { label: 'Vruchtb.', val: m.fertility, unit: '' },
+    { label: 'Vocht', val: m.moisture, unit: '%' },
+    { label: 'pH', val: m.ph, unit: '' },
+  ].filter(v => v.val !== null && v.val !== undefined);
+
+  const trendSvg = bakMetingen.length > 1 ? trendGrafiek(bakMetingen, 'moisture') : '';
+
+  return `<div class="card" onclick="toonDetail(${m.id})">
+    <div class="card-header">
+      <span class="plant-name">${m.bak} — ${m.plant || '—'}</span>
+      <span class="advice-badge badge-${m.status || 'ok'}">${badgeTekst(m.status)}</span>
+    </div>
+    <div class="plant-date">${datum}</div>
+    <div class="meter-grid">
+      ${velden.map(v => `<div class="meter-item">
+        <div class="meter-label">${v.label}</div>
+        <div class="meter-value">${v.val}</div>
+        <div class="meter-unit">${v.unit}</div>
+      </div>`).join('')}
+    </div>
+    ${trendSvg}
+    <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.5">${m.advies || ''}</div>
+  </div>`;
+}
+
+function badgeTekst(status) {
+  const map = { ok: 'Prima', water: 'Water geven', droog: 'Te droog', mest: 'Bemesten', warn: 'Opgelet' };
+  return map[status] || status || '—';
+}
+
+function trendGrafiek(metingen, veld) {
+  const data = metingen
+    .filter(m => m[veld] !== null && m[veld] !== undefined)
+    .sort((a, b) => a.datum - b.datum)
+    .slice(-10)
+    .map(m => m[veld]);
+  if (data.length < 2) return '';
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const w = 100, h = 40;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * w;
+    const y = h - ((v - min) / range) * (h - 6) - 3;
+    return `${x},${y}`;
+  });
+  const area = `0,${h} ${pts.join(' ')} ${w},${h}`;
+  return `<div class="trend-chart" title="Vocht trend">
+    <svg width="100%" height="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polygon class="trend-area" points="${area}"/>
+      <polyline class="trend-line" points="${pts.join(' ')}"/>
+    </svg>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// DETAIL OVERLAY
+// ═══════════════════════════════════════════════
+async function toonDetail(id) {
+  const m = await dbGet('metingen', id);
+  if (!m) return;
+  const datum = new Date(m.datum).toLocaleString('nl-BE');
+  document.getElementById('overlay-content').innerHTML = `
+    <h2 style="margin-bottom:6px">${m.bak} — ${m.plant || '—'}</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">${datum}</p>
+    ${m.fotoVer ? `<img class="photo-thumb" src="${m.fotoVer}" alt="foto ver">` : ''}
+    ${m.fotoDicht ? `<img class="photo-thumb" src="${m.fotoDicht}" alt="foto dicht">` : ''}
+    <div class="meter-grid" style="margin:12px 0">
+      ${[['Vruchtbaarheid', m.fertility, ''], ['Vocht', m.moisture, '%'], ['pH', m.ph, ''], ['Temp', m.temp, '°C'], ['Licht', m.light, 'lux']]
+        .filter(([,v]) => v !== null && v !== undefined)
+        .map(([l,v,u]) => `<div class="meter-item"><div class="meter-label">${l}</div><div class="meter-value">${v}</div><div class="meter-unit">${u}</div></div>`)
+        .join('')}
+    </div>
+    <div class="advice-box"><h3>Advies</h3>${m.advies || '—'}</div>
+    <button class="secondary-btn" style="color:var(--orange);border-color:var(--orange);margin-top:12px" onclick="verwijderMeting(${m.id})">Meting verwijderen</button>
+  `;
+  document.getElementById('overlay').classList.add('open');
+}
+
+function sluitOverlay() {
+  document.getElementById('overlay').classList.remove('open');
+}
+
+async function verwijderMeting(id) {
+  if (!confirm('Deze meting verwijderen?')) return;
+  await dbDelete('metingen', id);
+  sluitOverlay();
+  laadOverzicht();
+  toonToast('Meting verwijderd');
+}
+
+// ═══════════════════════════════════════════════
+// GESCHIEDENIS
+// ═══════════════════════════════════════════════
+async function laadGeschiedenis() {
+  const metingen = await dbGetAll('metingen');
+  const filter = document.getElementById('history-filter');
+
+  // Chips updaten
+  const bakken = [...new Set(metingen.map(m => m.bak))];
+  filter.innerHTML = `<div class="filter-chip ${state.filterBak === null ? 'active' : ''}" onclick="filterGeschiedenis(null, this)">Alles</div>`;
+  bakken.forEach(b => {
+    filter.innerHTML += `<div class="filter-chip ${state.filterBak === b ? 'active' : ''}" onclick="filterGeschiedenis('${b}', this)">${b}</div>`;
+  });
+
+  const gefilterd = state.filterBak ? metingen.filter(m => m.bak === state.filterBak) : metingen;
+  const gesorteerd = gefilterd.sort((a, b) => b.datum - a.datum);
+
+  const el = document.getElementById('history-list');
+  if (!gesorteerd.length) {
+    el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>Geen metingen gevonden.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = gesorteerd.map(m => {
+    const datum = new Date(m.datum).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `<div class="card" onclick="toonDetail(${m.id})">
+      <div class="card-header">
+        <span class="plant-name">${m.plant || '—'}</span>
+        <span class="advice-badge badge-${m.status || 'ok'}">${badgeTekst(m.status)}</span>
+      </div>
+      <div class="plant-date">${m.bak} · ${datum}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">${m.advies ? m.advies.substring(0, 100) + '…' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterGeschiedenis(bak, el) {
+  state.filterBak = bak;
+  document.querySelectorAll('#history-filter .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  laadGeschiedenis();
+}
+
+// ═══════════════════════════════════════════════
+// INSTELLINGEN
+// ═══════════════════════════════════════════════
+function laadInstellingen() {
+  const s = getSettings();
+  document.getElementById('inp-apikey').value = s.apiKey;
+  state.model = s.model;
+
+  // Model chips
+  document.querySelectorAll('.model-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.model === s.model);
+  });
+
+  // Bakken
+  const lijst = document.getElementById('bak-list');
+  lijst.innerHTML = s.bakken.map((b, i) => `
+    <div class="bak-item">
+      <input type="text" value="${b}" id="bak-${i}">
+      <button class="del-bak" onclick="this.parentElement.remove()">✕</button>
+    </div>
+  `).join('');
+
+  // Bakken ook in select vullen
+  vulBakSelect(s.bakken);
+}
+
+function vulBakSelect(bakken) {
+  const sel = document.getElementById('sel-bak');
+  const huidig = sel.value;
+  sel.innerHTML = '<option value="">— Kies een bak —</option>';
+  bakken.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b;
+    opt.textContent = b;
+    if (b === huidig) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function kiesModel(el) {
+  document.querySelectorAll('.model-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.model = el.dataset.model;
+  localStorage.setItem('gm_model', state.model);
+}
+
+function slaApiKeyOp() {
+  const key = document.getElementById('inp-apikey').value.trim();
+  localStorage.setItem('gm_apikey', key);
+  localStorage.setItem('gm_model', state.model);
+  document.getElementById('key-saved').style.display = 'block';
+  setTimeout(() => document.getElementById('key-saved').style.display = 'none', 2000);
+}
+
+function voegBakToe() {
+  const lijst = document.getElementById('bak-list');
+  const i = lijst.children.length;
+  const div = document.createElement('div');
+  div.className = 'bak-item';
+  div.innerHTML = `<input type="text" id="bak-${i}" placeholder="Naam bak"><button class="del-bak" onclick="this.parentElement.remove()">✕</button>`;
+  lijst.appendChild(div);
+}
+
+function slaBakkenOp() {
+  const bakken = [...document.querySelectorAll('.bak-item input')].map(i => i.value.trim()).filter(Boolean);
+  localStorage.setItem('gm_bakken', JSON.stringify(bakken));
+  vulBakSelect(bakken);
+  toonToast('Bakken opgeslagen');
+}
+
+// ═══════════════════════════════════════════════
+// DATA EXPORT / WISSEN
+// ═══════════════════════════════════════════════
+async function exportData() {
+  const metingen = await dbGetAll('metingen');
+  const blob = new Blob([JSON.stringify(metingen, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `grondmeter-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function wisAlles() {
+  if (!confirm('Alle metingen permanent verwijderen?')) return;
+  await dbClear('metingen');
+  toonToast('Alle data gewist');
+  laadOverzicht();
+}
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+function toonToast(tekst) {
+  const t = document.getElementById('toast');
+  t.textContent = tekst;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ═══════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════
+openDB().then(() => {
+  laadOverzicht();
+  const s = getSettings();
+  vulBakSelect(s.bakken);
+  state.model = s.model;
+}).catch(err => {
+  toonToast('Database fout: ' + err.message);
+});
+</script>
+</body>
+</html>
