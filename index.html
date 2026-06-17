@@ -586,6 +586,15 @@
       <button class="primary-btn" onclick="showScreen('screen-instellingen')">Naar instellingen</button>
       <button class="secondary-btn" onclick="slaManueelOp()">Meting opslaan zonder AI</button>
     </div>
+
+    <div id="api-error-box" style="display:none">
+      <div class="card">
+        <p style="font-size:14px;margin-bottom:10px" id="api-error-msg">⚠️ API-fout.</p>
+        <p style="font-size:12px;color:var(--muted)">Controleer je internetverbinding en of de sleutel correct is.</p>
+      </div>
+      <button class="primary-btn" onclick="startAnalyse()">Opnieuw proberen</button>
+      <button class="secondary-btn" onclick="slaManueelOp()">Meting opslaan zonder AI</button>
+    </div>
   </div>
 </div>
 
@@ -617,8 +626,10 @@
     <h2>Claude API</h2>
     <div class="settings-row">
       <label>API-sleutel</label>
+      <p class="hint" id="key-status-hint" style="margin-bottom:6px"></p>
       <input class="key-input" type="password" id="inp-apikey" placeholder="sk-ant-…">
       <p class="hint">Haal je sleutel op via <strong>console.anthropic.com</strong></p>
+      <p class="hint" style="margin-top:4px;color:#b45309">⚠️ De sleutel wordt opgeslagen in de browsercache. Als je de browser-data wist of de app verwijdert van je startscherm, moet je de sleutel opnieuw invoeren.</p>
       <div class="model-row">
         <span class="model-chip active" data-model="claude-haiku-4-5" onclick="kiesModel(this)">Haiku 4.5 (goedkoop)</span>
         <span class="model-chip" data-model="claude-sonnet-4-6" onclick="kiesModel(this)">Sonnet 4.6 (nauwkeuriger)</span>
@@ -825,6 +836,7 @@ function resetMeting() {
   document.getElementById('analysis-result').style.display = 'none';
   document.getElementById('analysis-loading').style.display = 'none';
   document.getElementById('no-api-box').style.display = 'none';
+  document.getElementById('api-error-box').style.display = 'none';
 }
 
 function resetFotoBtn(id) {
@@ -1000,7 +1012,8 @@ Antwoord UITSLUITEND in dit JSON-formaat (geen tekst erbuiten):
   } catch (err) {
     document.getElementById('analysis-loading').style.display = 'none';
     toonToast('Fout: ' + err.message);
-    document.getElementById('no-api-box').style.display = 'block';
+    document.getElementById('api-error-msg').textContent = '⚠️ ' + err.message;
+    document.getElementById('api-error-box').style.display = 'block';
   }
 }
 
@@ -1266,6 +1279,15 @@ function laadInstellingen() {
   const s = getSettings();
   document.getElementById('inp-apikey').value = s.apiKey;
   state.model = s.model;
+
+  const hint = document.getElementById('key-status-hint');
+  if (s.apiKey) {
+    hint.textContent = '✓ Sleutel opgeslagen: ' + s.apiKey.slice(0, 10) + '…';
+    hint.style.color = 'var(--green)';
+  } else {
+    hint.textContent = 'Nog geen sleutel ingesteld.';
+    hint.style.color = 'var(--orange)';
+  }
 
   // Model chips
   document.querySelectorAll('.model-chip').forEach(c => {
