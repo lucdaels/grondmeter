@@ -2,12 +2,15 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2d6a4f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Grondmeter">
-<title>Grondmeter</title>
+<title>Grondmeter v1.4</title>
 <link rel="manifest" href="manifest.json">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -455,7 +458,7 @@
 <!-- SCHERM 1: OVERZICHT -->
 <div id="screen-home" class="screen active">
   <div class="header">
-    <h1>🌱 Moestuin</h1>
+    <h1>🌱 Moestuin <span style="font-size:11px;font-weight:400;opacity:0.5">v1.5</span> <span id="sync-status" title="" style="font-size:14px;cursor:default"></span></h1>
     <button class="header-btn" onclick="showScreen('screen-meting')" title="Nieuwe meting">+</button>
   </div>
   <div id="overview-list">
@@ -649,6 +652,17 @@
   </div>
 
   <div class="settings-section">
+    <h2>OneDrive backup</h2>
+    <div class="settings-row">
+      <label>Server-adres (PC op wifi)</label>
+      <p class="hint" style="margin-bottom:6px">Start <strong>start-server.bat</strong> op je PC. Vul het adres in dat het servervenster toont (bijv. http://192.168.1.10:8080). Zolang je PC aan is en op hetzelfde wifi zit, worden al je bakken en metingen automatisch opgeslagen op je PC in OneDrive.</p>
+      <input type="url" id="inp-server-url" placeholder="http://192.168.1.10:8080" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:8px">
+      <button class="save-btn" onclick="slaServerUrlOp()">Opslaan &amp; verbinden</button>
+      <p class="status-ok" id="server-saved">✓ Verbonden</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
     <h2>Data</h2>
     <div class="settings-row">
       <label>Export</label>
@@ -780,6 +794,82 @@ function dbClear(store) {
   });
 }
 
+function dbPut(store, item) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(item);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// SERVER SYNC (OneDrive via lokale PC-server)
+// ═══════════════════════════════════════════════
+function getServerUrl() {
+  return (localStorage.getItem('gm_server_url') || '').replace(/\/$/, '');
+}
+
+function setSyncStatus(status) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (status === 'saving') { el.textContent = '↑'; el.style.color = '#f59e0b'; el.title = 'Opslaan…'; }
+  else if (status === 'ok')  { el.textContent = '☁'; el.style.color = '#6ee7b7'; el.title = 'Opgeslagen in OneDrive'; }
+  else if (status === 'off') { el.textContent = ''; }
+  else                        { el.textContent = '⚠'; el.style.color = '#f87171'; el.title = 'Server niet bereikbaar — data lokaal bewaard'; }
+}
+
+async function loadFromServer() {
+  const url = getServerUrl();
+  if (!url) return;
+  try {
+    const resp = await fetch(url + '/data', { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!data || typeof data !== 'object') return;
+    if (Array.isArray(data.bakken))                    localStorage.setItem('gm_bakken',   JSON.stringify(data.bakken));
+    if (data.bakInfo && typeof data.bakInfo === 'object') localStorage.setItem('gm_bak_info', JSON.stringify(data.bakInfo));
+    if (Array.isArray(data.metingen) && data.metingen.length > 0) {
+      await dbClear('metingen');
+      for (const m of data.metingen) await dbPut('metingen', m);
+    }
+    setSyncStatus('ok');
+  } catch(e) {
+    setSyncStatus('error');
+  }
+}
+
+async function saveToServer() {
+  const url = getServerUrl();
+  if (!url) return;
+  setSyncStatus('saving');
+  try {
+    const s = getSettings();
+    const metingen = await dbGetAll('metingen');
+    await fetch(url + '/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bakken: s.bakken, bakInfo: s.bakInfo, metingen }),
+      signal: AbortSignal.timeout(8000)
+    });
+    setSyncStatus('ok');
+  } catch(e) {
+    setSyncStatus('error');
+  }
+}
+
+async function slaServerUrlOp() {
+  const url = document.getElementById('inp-server-url').value.trim();
+  localStorage.setItem('gm_server_url', url);
+  const saved = document.getElementById('server-saved');
+  saved.style.display = 'block';
+  if (url) {
+    await loadFromServer();
+    laadOverzicht();
+  }
+  setTimeout(() => saved.style.display = 'none', 2000);
+}
+
 // ═══════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════
@@ -862,20 +952,44 @@ function goStep(n) {
 function fotoGekozen(kant, input) {
   const file = input.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    state.huidigeFoto[kant] = e.target.result; // base64 data URL
-    const lblId = kant === 'ver' ? 'lbl-foto-ver' : 'lbl-foto-dicht';
-    const lbl = document.getElementById(lblId);
-    lbl.querySelector('svg').style.display = 'none';
-    lbl.querySelector('span').style.display = 'none';
-    const img = lbl.querySelector('img') || document.createElement('img');
-    img.src = e.target.result;
-    if (!lbl.querySelector('img')) lbl.appendChild(img);
-    lbl.classList.add('photo-taken');
-    if (kant === 'ver') document.getElementById('btn-step1').disabled = false;
+  const blobUrl = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(blobUrl);
+    try {
+      const maxDim = 900;
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('geen canvas context');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+      const kb = Math.round(dataUrl.length * 0.75 / 1024);
+      state.huidigeFoto[kant] = dataUrl;
+      const lblId = kant === 'ver' ? 'lbl-foto-ver' : 'lbl-foto-dicht';
+      const lbl = document.getElementById(lblId);
+      lbl.querySelector('svg').style.display = 'none';
+      lbl.querySelector('span').style.display = 'none';
+      const imgEl = lbl.querySelector('img') || document.createElement('img');
+      imgEl.src = dataUrl;
+      if (!lbl.querySelector('img')) lbl.appendChild(imgEl);
+      // Debug: toon gecomprimeerde grootte
+      let dbg = lbl.querySelector('.foto-dbg');
+      if (!dbg) { dbg = document.createElement('small'); dbg.className = 'foto-dbg'; dbg.style.cssText = 'display:block;color:#888;font-size:10px'; lbl.appendChild(dbg); }
+      dbg.textContent = `${canvas.width}×${canvas.height}px · ${kb}kb`;
+      lbl.classList.add('photo-taken');
+      if (kant === 'ver') document.getElementById('btn-step1').disabled = false;
+    } catch(e) {
+      alert(`Foto compressie mislukt: ${e.message}. Verlaag de camera-resolutie.`);
+    }
   };
-  reader.readAsDataURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(blobUrl);
+    alert('Kan foto niet laden. Probeer opnieuw.');
+  };
+  img.src = blobUrl;
 }
 
 // ═══════════════════════════════════════════════
@@ -917,24 +1031,28 @@ async function startAnalyse() {
     // Berichten opbouwen
     const content = [];
 
+    const API_LIMIT = 9.5 * 1024 * 1024; // 9.5 MB marge onder de 10 MB grens
+
     // Foto van ver (plant herkennen)
     if (state.huidigeFoto.ver) {
-      const base64 = state.huidigeFoto.ver.split(',')[1];
-      const mediaType = state.huidigeFoto.ver.split(';')[0].split(':')[1];
+      const fotoVer = await comprimeerFotoMaxSize(state.huidigeFoto.ver);
+      const base64 = fotoVer.split(',')[1];
+      if (base64.length * 0.75 > API_LIMIT) throw new Error(`Foto van ver nog te groot na compressie (${Math.round(base64.length * 0.75 / 1024 / 1024 * 10) / 10} MB). Gebruik een lagere camera-resolutie.`);
       content.push({
         type: 'image',
-        source: { type: 'base64', media_type: mediaType, data: base64 }
+        source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
       });
       content.push({ type: 'text', text: 'Dit is de foto van ver (voor plantherkenning).' });
     }
 
     // Foto van dicht (meter lezen)
     if (state.huidigeFoto.dicht) {
-      const base64 = state.huidigeFoto.dicht.split(',')[1];
-      const mediaType = state.huidigeFoto.dicht.split(';')[0].split(':')[1];
+      const fotoDicht = await comprimeerFotoMaxSize(state.huidigeFoto.dicht);
+      const base64 = fotoDicht.split(',')[1];
+      if (base64.length * 0.75 > API_LIMIT) throw new Error(`Foto van dicht nog te groot na compressie (${Math.round(base64.length * 0.75 / 1024 / 1024 * 10) / 10} MB). Gebruik een lagere camera-resolutie.`);
       content.push({
         type: 'image',
-        source: { type: 'base64', media_type: mediaType, data: base64 }
+        source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
       });
       content.push({ type: 'text', text: 'Dit is de close-up van de grondmeter display.' });
     }
@@ -1049,20 +1167,33 @@ function toonResultaat(r) {
   document.getElementById('result-advice').innerHTML = `<h3>Advies</h3>${r.advies}`;
 }
 
-function comprimeerFoto(dataUrl) {
+function comprimeerFoto(dataUrl, maxW = 800, kwaliteit = 0.7) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
-      const maxW = 800;
       const scale = Math.min(1, maxW / img.width);
       const canvas = document.createElement('canvas');
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(dataUrl); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', kwaliteit));
     };
+    img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
+}
+
+// Iteratieve compressie: verlaag kwaliteit tot base64 < maxBytes (default 7 MB)
+async function comprimeerFotoMaxSize(dataUrl, maxW = 1200, maxBytes = 7 * 1024 * 1024) {
+  let kwaliteit = 0.82;
+  while (kwaliteit >= 0.25) {
+    const result = await comprimeerFoto(dataUrl, maxW, kwaliteit);
+    if (result.split(',')[1].length * 0.75 <= maxBytes) return result;
+    kwaliteit = Math.round((kwaliteit - 0.1) * 100) / 100;
+  }
+  return comprimeerFoto(dataUrl, Math.round(maxW / 2), 0.5);
 }
 async function slaOp() {
   const r = state.analyseResultaat;
@@ -1082,6 +1213,7 @@ async function slaOp() {
     fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
   };
   await dbAdd('metingen', meting);
+  saveToServer();
   toonToast('Meting opgeslagen!');
   showScreen('screen-home');
 }
@@ -1102,6 +1234,7 @@ async function slaManueelOp() {
     fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
   };
   await dbAdd('metingen', meting);
+  saveToServer();
   toonToast('Meting opgeslagen!');
   showScreen('screen-home');
 }
@@ -1224,6 +1357,7 @@ function sluitOverlay() {
 async function verwijderMeting(id) {
   if (!confirm('Deze meting verwijderen?')) return;
   await dbDelete('metingen', id);
+  saveToServer();
   sluitOverlay();
   laadOverzicht();
   toonToast('Meting verwijderd');
@@ -1309,6 +1443,9 @@ function laadInstellingen() {
 
   // Bakken ook in select vullen
   vulBakSelect(s.bakken);
+
+  // Server URL invullen
+  document.getElementById('inp-server-url').value = getServerUrl();
 }
 
 function vulBakSelect(bakken) {
@@ -1370,6 +1507,7 @@ function slaBakkenOp() {
   localStorage.setItem('gm_bakken', JSON.stringify(bakken));
   localStorage.setItem('gm_bak_info', JSON.stringify(bakInfo));
   vulBakSelect(bakken);
+  saveToServer();
   toonToast('Bakken opgeslagen');
 }
 
@@ -1407,11 +1545,13 @@ function toonToast(tekst) {
 // ═══════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════
-openDB().then(() => {
-  laadOverzicht();
+openDB().then(async () => {
+  await loadFromServer();
   const s = getSettings();
   vulBakSelect(s.bakken);
   state.model = s.model;
+  laadOverzicht();
+  if (!getServerUrl()) setSyncStatus('off');
 }).catch(err => {
   toonToast('Database fout: ' + err.message);
 });

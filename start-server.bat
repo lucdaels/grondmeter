@@ -17,5 +17,5 @@ echo.
 echo  Druk op Ctrl+C om te stoppen.
 echo.
 cd /d "%~dp0"
-"%APPDATA%\uv\python\cpython-3.14.6-windows-x86_64-none\python.exe" -m http.server 8080
+"%APPDATA%\uv\python\cpython-3.14.6-windows-x86_64-none\python.exe" server.py
 pause
