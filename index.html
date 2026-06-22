@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Grondmeter">
 <title>Grondmeter v1.4</title>
 <link rel="manifest" href="manifest.json">
+<script src="firebase-config.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -652,13 +653,16 @@
   </div>
 
   <div class="settings-section">
-    <h2>OneDrive backup</h2>
+    <h2>Account</h2>
     <div class="settings-row">
-      <label>Server-adres (PC op wifi)</label>
-      <p class="hint" style="margin-bottom:6px">Start <strong>start-server.bat</strong> op je PC. Vul het adres in dat het servervenster toont (bijv. http://192.168.1.10:8080). Zolang je PC aan is en op hetzelfde wifi zit, worden al je bakken en metingen automatisch opgeslagen op je PC in OneDrive.</p>
-      <input type="url" id="inp-server-url" placeholder="http://192.168.1.10:8080" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:8px">
-      <button class="save-btn" onclick="slaServerUrlOp()">Opslaan &amp; verbinden</button>
-      <p class="status-ok" id="server-saved">✓ Verbonden</p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <img id="user-avatar" src="" alt="" style="width:40px;height:40px;border-radius:50%;display:none">
+        <div>
+          <div id="user-name" style="font-weight:600;font-size:15px"></div>
+          <div id="user-email" style="font-size:12px;color:var(--muted)"></div>
+        </div>
+      </div>
+      <button class="save-btn" style="background:var(--orange)" onclick="window.gmSignOut && window.gmSignOut()">Afmelden</button>
     </div>
   </div>
 
@@ -675,6 +679,17 @@
       <button class="save-btn" style="background:var(--orange)" onclick="wisAlles()">Alles wissen</button>
     </div>
   </div>
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="position:fixed;inset:0;background:var(--green);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+  <div style="font-size:72px;margin-bottom:16px">🌱</div>
+  <h1 style="color:white;font-size:26px;font-weight:700;margin-bottom:8px">Grondmeter</h1>
+  <p style="color:rgba(255,255,255,.75);font-size:15px;margin-bottom:32px;max-width:280px;line-height:1.6">Meld je aan om je metingen in de cloud op te slaan en op elk apparaat te bekijken.</p>
+  <button onclick="window.gmSignIn && window.gmSignIn()" style="background:white;color:#1b4332;border:none;border-radius:12px;padding:14px 24px;font-size:16px;font-weight:700;cursor:pointer;width:100%;max-width:300px;display:flex;align-items:center;justify-content:center;gap:10px">
+    <svg width="20" height="20" viewBox="0 0 48 48" fill="none"><path fill="#4285F4" d="M47.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h13.2c-.6 3-2.3 5.5-4.9 7.2v6h7.9c4.6-4.3 7.3-10.6 7.3-17.2z"/><path fill="#34A853" d="M24 48c6.5 0 12-2.2 16-5.8l-7.9-6C29.9 37.5 27.1 38.5 24 38.5c-6.3 0-11.6-4.3-13.5-10H2.3v6.2C6.3 43.1 14.6 48 24 48z"/><path fill="#FBBC05" d="M10.5 28.5c-.5-1.5-.8-3-.8-4.5s.3-3 .8-4.5V13.3H2.3C.8 16.4 0 19.8 0 23.5s.8 7.1 2.3 10.2l8.2-5.2z"/><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.2 30.4 0 24 0 14.6 0 6.3 4.9 2.3 13.3l8.2 6.2C12.4 13.8 17.7 9.5 24 9.5z"/></svg>
+    Aanmelden met Google
+  </button>
 </div>
 
 <!-- DETAIL OVERLAY -->
@@ -804,70 +819,15 @@ function dbPut(store, item) {
 }
 
 // ═══════════════════════════════════════════════
-// SERVER SYNC (OneDrive via lokale PC-server)
+// SYNC STATUS (wordt aangestuurd door Firebase module)
 // ═══════════════════════════════════════════════
-function getServerUrl() {
-  return (localStorage.getItem('gm_server_url') || '').replace(/\/$/, '');
-}
-
 function setSyncStatus(status) {
   const el = document.getElementById('sync-status');
   if (!el) return;
   if (status === 'saving') { el.textContent = '↑'; el.style.color = '#f59e0b'; el.title = 'Opslaan…'; }
-  else if (status === 'ok')  { el.textContent = '☁'; el.style.color = '#6ee7b7'; el.title = 'Opgeslagen in OneDrive'; }
-  else if (status === 'off') { el.textContent = ''; }
-  else                        { el.textContent = '⚠'; el.style.color = '#f87171'; el.title = 'Server niet bereikbaar — data lokaal bewaard'; }
-}
-
-async function loadFromServer() {
-  const url = getServerUrl();
-  if (!url) return;
-  try {
-    const resp = await fetch(url + '/data', { cache: 'no-store', signal: AbortSignal.timeout(4000) });
-    if (!resp.ok) return;
-    const data = await resp.json();
-    if (!data || typeof data !== 'object') return;
-    if (Array.isArray(data.bakken))                    localStorage.setItem('gm_bakken',   JSON.stringify(data.bakken));
-    if (data.bakInfo && typeof data.bakInfo === 'object') localStorage.setItem('gm_bak_info', JSON.stringify(data.bakInfo));
-    if (Array.isArray(data.metingen) && data.metingen.length > 0) {
-      await dbClear('metingen');
-      for (const m of data.metingen) await dbPut('metingen', m);
-    }
-    setSyncStatus('ok');
-  } catch(e) {
-    setSyncStatus('error');
-  }
-}
-
-async function saveToServer() {
-  const url = getServerUrl();
-  if (!url) return;
-  setSyncStatus('saving');
-  try {
-    const s = getSettings();
-    const metingen = await dbGetAll('metingen');
-    await fetch(url + '/data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bakken: s.bakken, bakInfo: s.bakInfo, metingen }),
-      signal: AbortSignal.timeout(8000)
-    });
-    setSyncStatus('ok');
-  } catch(e) {
-    setSyncStatus('error');
-  }
-}
-
-async function slaServerUrlOp() {
-  const url = document.getElementById('inp-server-url').value.trim();
-  localStorage.setItem('gm_server_url', url);
-  const saved = document.getElementById('server-saved');
-  saved.style.display = 'block';
-  if (url) {
-    await loadFromServer();
-    laadOverzicht();
-  }
-  setTimeout(() => saved.style.display = 'none', 2000);
+  else if (status === 'ok')  { el.textContent = '☁'; el.style.color = '#6ee7b7'; el.title = 'Opgeslagen in Firebase'; }
+  else if (status === 'off') { el.textContent = ''; el.title = ''; }
+  else                        { el.textContent = '⚠'; el.style.color = '#f87171'; el.title = 'Sync fout — data lokaal bewaard'; }
 }
 
 // ═══════════════════════════════════════════════
@@ -1212,8 +1172,9 @@ async function slaOp() {
     fotoVer: state.huidigeFoto.ver ? await comprimeerFoto(state.huidigeFoto.ver) : null,
     fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
   };
-  await dbAdd('metingen', meting);
-  saveToServer();
+  const id = await dbAdd('metingen', meting);
+  meting.id = id;
+  if (window.gmSaveMeting) window.gmSaveMeting(meting).catch(e => console.error('Firebase sync:', e));
   toonToast('Meting opgeslagen!');
   showScreen('screen-home');
 }
@@ -1233,8 +1194,9 @@ async function slaManueelOp() {
     fotoVer: state.huidigeFoto.ver ? await comprimeerFoto(state.huidigeFoto.ver) : null,
     fotoDicht: state.huidigeFoto.dicht ? await comprimeerFoto(state.huidigeFoto.dicht) : null,
   };
-  await dbAdd('metingen', meting);
-  saveToServer();
+  const id = await dbAdd('metingen', meting);
+  meting.id = id;
+  if (window.gmSaveMeting) window.gmSaveMeting(meting).catch(e => console.error('Firebase sync:', e));
   toonToast('Meting opgeslagen!');
   showScreen('screen-home');
 }
@@ -1357,7 +1319,7 @@ function sluitOverlay() {
 async function verwijderMeting(id) {
   if (!confirm('Deze meting verwijderen?')) return;
   await dbDelete('metingen', id);
-  saveToServer();
+  if (window.gmDeleteMeting) window.gmDeleteMeting(id).catch(e => console.error('Firebase delete:', e));
   sluitOverlay();
   laadOverzicht();
   toonToast('Meting verwijderd');
@@ -1443,9 +1405,6 @@ function laadInstellingen() {
 
   // Bakken ook in select vullen
   vulBakSelect(s.bakken);
-
-  // Server URL invullen
-  document.getElementById('inp-server-url').value = getServerUrl();
 }
 
 function vulBakSelect(bakken) {
@@ -1507,7 +1466,7 @@ function slaBakkenOp() {
   localStorage.setItem('gm_bakken', JSON.stringify(bakken));
   localStorage.setItem('gm_bak_info', JSON.stringify(bakInfo));
   vulBakSelect(bakken);
-  saveToServer();
+  if (window.gmSaveInstellingen) window.gmSaveInstellingen().catch(e => console.error('Firebase instellingen:', e));
   toonToast('Bakken opgeslagen');
 }
 
@@ -1545,16 +1504,163 @@ function toonToast(tekst) {
 // ═══════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════
-openDB().then(async () => {
-  await loadFromServer();
+// dbReady: Firebase module wacht hierop voor IndexedDB beschikbaar is
+window.dbReady = openDB().then(() => {
   const s = getSettings();
   vulBakSelect(s.bakken);
   state.model = s.model;
   laadOverzicht();
-  if (!getServerUrl()) setSyncStatus('off');
+  setSyncStatus('off');
 }).catch(err => {
   toonToast('Database fout: ' + err.message);
 });
+</script>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js';
+import { getAuth, signInWithPopup, signInWithRedirect, GoogleAuthProvider, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js';
+
+const config = window.FIREBASE_CONFIG;
+if (!config) {
+  console.warn('firebase-config.js niet gevonden — Firebase uitgeschakeld');
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'none';
+} else {
+  const app = initializeApp(config);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  // Extra compressie voor Firestore (houd foto's onder ~200KB als base64)
+  function comprimeerFotoFs(dataUrl) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 500 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+
+  async function loadFromFirestore(uid) {
+    await window.dbReady;
+    setSyncStatus('saving');
+    try {
+      // Instellingen laden
+      const instellSnap = await getDoc(doc(db, 'grondmeter', uid, 'instellingen', 'profiel'));
+      if (instellSnap.exists()) {
+        const d = instellSnap.data();
+        if (Array.isArray(d.bakken)) localStorage.setItem('gm_bakken', JSON.stringify(d.bakken));
+        if (d.bakInfo && typeof d.bakInfo === 'object') localStorage.setItem('gm_bak_info', JSON.stringify(d.bakInfo));
+      }
+      // Metingen laden
+      const metSnap = await getDocs(collection(db, 'grondmeter', uid, 'metingen'));
+      if (!metSnap.empty) {
+        await dbClear('metingen');
+        for (const d of metSnap.docs) {
+          const { syncedAt, ...rest } = d.data();
+          await dbPut('metingen', rest);
+        }
+      }
+      setSyncStatus('ok');
+      const s = getSettings();
+      vulBakSelect(s.bakken);
+      laadOverzicht();
+    } catch (e) {
+      console.error('Firestore load fout:', e);
+      setSyncStatus('error');
+    }
+  }
+
+  window.gmSignIn = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (e) {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
+        await signInWithRedirect(auth, provider);
+      } else {
+        toonToast('Aanmelden mislukt: ' + e.message);
+      }
+    }
+  };
+
+  window.gmSignOut = async () => {
+    if (!confirm('Afmelden?')) return;
+    await signOut(auth);
+  };
+
+  window.gmSaveMeting = async (meting) => {
+    if (!auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    setSyncStatus('saving');
+    try {
+      const fotoVer = meting.fotoVer ? await comprimeerFotoFs(meting.fotoVer) : null;
+      const fotoDicht = meting.fotoDicht ? await comprimeerFotoFs(meting.fotoDicht) : null;
+      const { syncedAt, ...rest } = meting;
+      await setDoc(doc(db, 'grondmeter', uid, 'metingen', String(meting.id)), {
+        ...rest, fotoVer, fotoDicht, syncedAt: serverTimestamp()
+      });
+      setSyncStatus('ok');
+    } catch (e) {
+      console.error('Firebase save fout:', e);
+      setSyncStatus('error');
+    }
+  };
+
+  window.gmDeleteMeting = async (id) => {
+    if (!auth.currentUser) return;
+    try {
+      await deleteDoc(doc(db, 'grondmeter', auth.currentUser.uid, 'metingen', String(id)));
+    } catch (e) {
+      console.error('Firebase delete fout:', e);
+    }
+  };
+
+  window.gmSaveInstellingen = async () => {
+    if (!auth.currentUser) return;
+    const s = getSettings();
+    try {
+      await setDoc(doc(db, 'grondmeter', auth.currentUser.uid, 'instellingen', 'profiel'), {
+        bakken: s.bakken, bakInfo: s.bakInfo, syncedAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.error('Firebase instellingen fout:', e);
+    }
+  };
+
+  const OWNER_EMAIL = 'lucdaels@gmail.com';
+
+  onAuthStateChanged(auth, async (user) => {
+    const overlay = document.getElementById('login-overlay');
+    if (user) {
+      if (user.email.toLowerCase() !== OWNER_EMAIL) {
+        await signOut(auth);
+        toonToast('Geen toegang voor dit account.');
+        return;
+      }
+      if (overlay) overlay.style.display = 'none';
+      const nameEl = document.getElementById('user-name');
+      const emailEl = document.getElementById('user-email');
+      const avatarEl = document.getElementById('user-avatar');
+      if (nameEl) nameEl.textContent = user.displayName || '';
+      if (emailEl) emailEl.textContent = user.email;
+      if (avatarEl && user.photoURL) { avatarEl.src = user.photoURL; avatarEl.style.display = ''; }
+      await loadFromFirestore(user.uid);
+    } else {
+      if (overlay) overlay.style.display = 'flex';
+      setSyncStatus('off');
+    }
+  });
+}
 </script>
 </body>
 </html>
